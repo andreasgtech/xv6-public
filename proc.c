@@ -7,6 +7,8 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#include "minheap.h"
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -19,6 +21,8 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+
+minheap heap;
 
 void
 pinit(void)
@@ -117,11 +121,14 @@ found:
 
 //PAGEBREAK: 32
 // Set up first user process.
+
 void
 userinit(void)
 {
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
+
+  heap.num_procs=0;
 
   p = allocproc();
   
@@ -149,6 +156,9 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+
+  calcInitPr(p);
+  insertNode(&heap, p);
 
   release(&ptable.lock);
 }
@@ -215,6 +225,9 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+
+  calcInitPr(np);
+  insertNode(&heap, np);
 
   release(&ptable.lock);
 
@@ -332,13 +345,23 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    /*for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    {
       if(p->state != RUNNABLE)
-        continue;
+        continue;*/
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
+      
+      while(!heap.num_procs)
+      {
+        release(&ptable.lock);
+        acquire(&ptable.lock);
+      }
+
+      p = popNode(&heap);
+      p->times_sched++;
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
@@ -349,7 +372,8 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-    }
+    //}
+
     release(&ptable.lock);
 
   }
@@ -387,6 +411,11 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+
+  myproc()->runningTime++;
+  calcPr(myproc());
+  insertNode(&heap, myproc());
+
   sched();
   release(&ptable.lock);
 }
@@ -461,7 +490,12 @@ wakeup1(void *chan)
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan)
+    {
       p->state = RUNNABLE;
+
+      calcPr(p);
+      insertNode(&heap, p);
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -487,7 +521,13 @@ kill(int pid)
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
+      {
         p->state = RUNNABLE;
+
+        calcInitPr(p);          //setting priority to 0
+        insertNode(&heap, p);   //adding process temporarilly on top
+        p=popNode(&heap);       //popping process
+      }
       release(&ptable.lock);
       return 0;
     }

@@ -6,6 +6,9 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
+#include "spinlock.h"
+
+//#include <stdio.h>
 
 int
 sys_fork(void)
@@ -88,4 +91,39 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+extern struct {
+  struct spinlock lock;
+  struct proc proc[NPROC];
+} ptable;
+
+int sys_printRunningProc(void)
+{
+  struct proc * p;
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {
+    if(p->state != UNUSED)
+    {
+      cprintf("PID: %d, ", p->pid);
+      cprintf("Name: %s, ", p->name);
+      cprintf("PPID: %d, ", p->parent->pid);
+      switch(p->state)
+      {
+        case UNUSED : cprintf("State: %s, ", "UNUSED"); break;
+        case EMBRYO : cprintf("State: %s, ", "EMBRYO"); break;
+        case SLEEPING : cprintf("State: %s, ", "SLEEPING"); break;
+        case RUNNABLE : cprintf("State: %s, ", "RUNNABLE"); break;
+        case RUNNING : cprintf("State: %s, ", "RUNNING"); break;
+        case ZOMBIE : cprintf("State: %s, ", "ZOMBIE"); break;
+      }
+      cprintf("Runnnig time: %d, ", p->runningTime);
+      cprintf("Creation time: %d, ", p->birthTime);
+      cprintf("Priority: %d, ", p->priority);     
+      cprintf("Times scheduled: %d\n", p->times_sched);
+    }
+  }
+  release(&ptable.lock);
+  return 0;
 }

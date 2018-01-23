@@ -11,6 +11,7 @@ OBJS = \
 	lapic.o\
 	log.o\
 	main.o\
+	minheap.o\
 	mp.o\
 	picirq.o\
 	pipe.o\
@@ -174,6 +175,12 @@ UPROGS=\
 	_usertests\
 	_wc\
 	_zombie\
+	_wl1\
+	_wl2\
+	_wl3\
+	_wl4\
+	_wl5\
+	_ps\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
@@ -246,6 +253,7 @@ EXTRA=\
 	printf.c umalloc.c\
 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
 	.gdbinit.tmpl gdbutil\
+	minheap.c minheap.h\
 
 dist:
 	rm -rf dist
